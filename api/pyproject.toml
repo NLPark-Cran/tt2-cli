@@ -1,0 +1,55 @@
+[project]
+name = "tt2-api"
+version = "0.1.0"
+description = "tt2-cli 控制面 API（?hub.tt2.li 托管网络）"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "httpx>=0.28",
+    "structlog>=24.4",
+    "cryptography>=44",
+    "python-multipart>=0.0.12",
+    "itsdangerous>=2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+ignore = [
+    "S101",  # assert 在测试中允许
+    "B008",  # FastAPI 依赖注入惯用法 Depends() 作默认参数
+    "UP042", # TaskStatus 需要同时是 str 和 Enum（JSON 序列化）
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/chaxunma/prompts.py" = ["E501"]  # 提示词为自然语言长行
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"

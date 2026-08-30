@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / Astro
+node_modules/
+web/dist/
+.web/
+
+# Env & secrets
+.env
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
