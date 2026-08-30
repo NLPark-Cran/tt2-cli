@@ -1,0 +1,116 @@
+---
+// CLI 完整命令参考
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="CLI 命令参考" description="tt2 CLI 全部命令的完整参考：login / logout / whoami / push / reply / status / tasks / sites / delete / domain / connect-tokenpay，含 --json 模式。">
+  <p>
+    <code>tt2</code> 是 lhub.tt2.li 静态托管网络的命令行工具。
+    本页覆盖全部命令。<strong>所有命令均支持 <code>--json</code> 输出结构化结果</strong>，便于 Agent 程序化消费。
+  </p>
+
+  <h2>全局说明：--json 模式</h2>
+  <p>在任何命令后追加 <code>--json</code>，输出将切换为单行 JSON，成功时：</p>
+  <pre><code>&lbrace;"ok": true, "data": &lbrace; ... &rbrace;&rbrace;</code></pre>
+  <p>失败时统一返回：</p>
+  <pre><code>&lbrace;"ok": false, "error": &lbrace;"code": "SITE_NOT_FOUND", "message": "站点不存在"&rbrace;&rbrace;</code></pre>
+  <p>
+    Agent 集成时建议始终携带 <code>--json</code>，并以退出码判断成败（0 成功，非 0 失败），
+    <code>error.message</code> 可直接展示给人类用户。
+  </p>
+
+  <h2>认证</h2>
+
+  <h3>tt2 login</h3>
+  <p>发起观猹 OAuth 设备码授权流程。终端打印授权码与确认链接，浏览器确认后 CLI 自动获得凭证。</p>
+  <pre><code>tt2 login
+tt2 login --json   # 输出 &lbrace;"user_code":"ABCD-1234","verify_url":"..."&rbrace;</code></pre>
+
+  <h3>tt2 logout</h3>
+  <p>清除本机保存的登录凭证（不影响控制台里已创建的 CLI Token）。</p>
+  <pre><code>tt2 logout</code></pre>
+
+  <h3>tt2 whoami</h3>
+  <p>显示当前登录身份（昵称、观猹 ID、TokenPay 连接状态）。</p>
+  <pre><code>tt2 whoami --json
+# &lbrace;"nickname":"阿猹","watcha_id":"w_123","tokendance_connected":true&rbrace;</code></pre>
+
+  <h2>部署</h2>
+
+  <h3>tt2 push</h3>
+  <p>把本地静态产物目录推送为线上站点。产物要求见<a href="/docs/standards/">推送标准</a>。</p>
+  <pre><code>tt2 push &lt;目录&gt; --name &lt;站点名&gt; [--spa] [--json]
+
+# 示例：部署 ./dist 到 https://myapp.lhub.tt2.li
+tt2 push ./dist --name myapp
+
+# SPA 模式：所有路径回退到 index.html
+tt2 push ./dist --name myapp --spa</code></pre>
+  <table>
+    <tr><th>参数</th><th>说明</th></tr>
+    <tr><td><code>&lt;目录&gt;</code></td><td>静态产物目录，必须包含 <code>index.html</code>，总大小 ≤ 50MB</td></tr>
+    <tr><td><code>--name</code></td><td>站点名，决定三级域名 <code>&lt;name&gt;.lhub.tt2.li</code>；小写字母 / 数字 / 中划线，3–32 字符</td></tr>
+    <tr><td><code>--spa</code></td><td>启用单页应用回退（404 → index.html）</td></tr>
+  </table>
+  <p>push 是<strong>异步任务</strong>：命令返回 <code>task_id</code> 后立即退出，实际部署由猹询码在服务端完成。</p>
+
+  <h3>tt2 reply</h3>
+  <p>查询某个任务的最新状态与猹询码的回复（审查结论、修补记录、错误原因）。</p>
+  <pre><code>tt2 reply &lt;task_id&gt;
+tt2 reply &lt;task_id&gt; --json
+# &lbrace;"task_id":"t_01J...","status":"succeeded","result":&lbrace;"url":"https://myapp.lhub.tt2.li"&rbrace;&rbrace;</code></pre>
+
+  <h3>tt2 status</h3>
+  <p>查看某个站点的当前状态（在线 / 部署中 / 失败）、绑定的域名与最近任务。</p>
+  <pre><code>tt2 status --name myapp</code></pre>
+
+  <h3>tt2 tasks</h3>
+  <p>列出最近的部署任务，含计费信息（消耗 TokenPay 额度或走了免费任务池）。</p>
+  <pre><code>tt2 tasks
+tt2 tasks --limit 20 --json</code></pre>
+
+  <h2>站点管理</h2>
+
+  <h3>tt2 sites</h3>
+  <p>列出你名下的全部站点。</p>
+  <pre><code>tt2 sites --json
+# [&lbrace;"name":"myapp","host":"myapp.lhub.tt2.li","url":"https://myapp.lhub.tt2.li","spa":false,"status":"online","created_at":"..."&rbrace;]</code></pre>
+
+  <h3>tt2 delete</h3>
+  <p>删除站点及其全部文件，三级域名随之释放。<strong>不可恢复</strong>，请谨慎操作。</p>
+  <pre><code>tt2 delete --name myapp
+tt2 delete --name myapp --yes   # 跳过确认提示（Agent 场景）</code></pre>
+
+  <h2>域名管理</h2>
+  <p>自备域名的 DNS 配置细节见<a href="/docs/domain/">自备域名指南</a>。</p>
+
+  <h3>tt2 domain add</h3>
+  <p>为站点绑定自备域名。添加后按提示配置 DNS，证书将自动签发。</p>
+  <pre><code>tt2 domain add --name myapp --domain app.example.com</code></pre>
+
+  <h3>tt2 domain list</h3>
+  <p>列出某站点绑定的全部自备域名及验证状态。</p>
+  <pre><code>tt2 domain list --name myapp --json</code></pre>
+
+  <h3>tt2 domain check</h3>
+  <p>主动触发一次 DNS 解析检查。DNS 生效且验证通过后，Let's Encrypt 证书会自动签发。</p>
+  <pre><code>tt2 domain check --name myapp --domain app.example.com</code></pre>
+
+  <h3>tt2 domain delete</h3>
+  <p>解绑自备域名（不影响默认的 <code>&lt;name&gt;.lhub.tt2.li</code> 域名）。</p>
+  <pre><code>tt2 domain delete --name myapp --domain app.example.com</code></pre>
+
+  <h2>计费</h2>
+
+  <h3>tt2 connect-tokenpay</h3>
+  <p>
+    打印 TokenPay（TokenDance）授权链接，在浏览器中完成连接后，
+    部署任务将消耗你自己的模型额度；未连接或额度耗尽时使用全平台共享免费任务池。
+    也可以在<a href="/console/">控制台</a>中一键连接。
+  </p>
+  <pre><code>tt2 connect-tokenpay</code></pre>
+
+  <h2>获取帮助</h2>
+  <pre><code>tt2 --help          # 总览
+tt2 &lt;命令&gt; --help  # 单命令帮助，如 tt2 push --help</code></pre>
+</DocsLayout>

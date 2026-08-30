@@ -1,0 +1,129 @@
+---
+// 设备码确认页：/console/device?code=XXXX-XXXX
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="设备授权确认" description="确认 tt2 CLI 的设备授权码，允许 CLI 访问你的 lhub 账号。">
+  <div class="mx-auto max-w-lg px-4 py-16 sm:px-6">
+    <div class="rounded-2xl border border-ink-700 bg-ink-900/70 p-8 text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-brand-500/40 bg-brand-500/10">
+        <svg viewBox="0 0 24 24" class="h-7 w-7 fill-brand-400" aria-hidden="true">
+          <path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2ZM6.41 15.41 5 14l3-3-3-3 1.41-1.41L10.83 11l-4.42 4.41ZM18 16h-6v-2h6v2Z" />
+        </svg>
+      </div>
+      <h1 class="mt-5 text-2xl font-bold text-brand-50">确认 CLI 设备授权</h1>
+      <p class="mt-2 text-sm text-zinc-400">
+        你的终端正在执行 <code class="font-mono text-brand-300">tt2 login</code>。请核对下方授权码与终端显示一致后再确认。
+      </p>
+
+      <div class="mt-6 rounded-xl border border-ink-600 bg-ink-950 px-6 py-5">
+        <p class="font-mono text-xs text-zinc-500">授权码</p>
+        <p id="device-code" class="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-brand-300">----</p>
+      </div>
+
+      <!-- 加载 / 未登录 / 已登录 / 完成 四个状态 -->
+      <div id="d-loading" class="mt-8 flex items-center justify-center gap-2 text-sm text-zinc-500">
+        <span class="h-4 w-4 animate-spin rounded-full border-2 border-ink-500 border-t-brand-400"></span>
+        正在检查登录状态…
+      </div>
+
+      <div id="d-guest" class="mt-8 hidden">
+        <p class="text-sm text-zinc-400">授权前需要先登录观猹账号，登录完成后会自动回到本页。</p>
+        <button id="d-login-btn" class="mt-4 w-full rounded-lg bg-brand-500 px-6 py-3 font-medium text-ink-950 transition-colors hover:bg-brand-400">
+          使用观猹登录
+        </button>
+      </div>
+
+      <div id="d-user" class="mt-8 hidden">
+        <p class="text-sm text-zinc-400">当前登录：<span id="d-nickname" class="font-medium text-brand-200"></span></p>
+        <button id="d-approve-btn" class="mt-4 w-full rounded-lg bg-brand-500 px-6 py-3 font-medium text-ink-950 transition-colors hover:bg-brand-400">
+          确认授权
+        </button>
+        <p class="mt-3 text-xs text-zinc-600">确认后，该终端的 tt2 CLI 将获得你账号的操作权限。</p>
+      </div>
+
+      <div id="d-done" class="mt-8 hidden">
+        <p class="text-lg font-medium text-brand-300">✓ 授权成功</p>
+        <p class="mt-2 text-sm text-zinc-400">可以回到终端继续操作了，本页可直接关闭。</p>
+      </div>
+
+      <p id="d-error" class="mt-6 hidden rounded-lg border border-red-500/40 bg-red-950/60 px-4 py-3 text-sm text-red-200"></p>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  // ================= 设备码确认页逻辑 =================
+
+  async function api(path: string, options: RequestInit = {}): Promise<any> {
+    const res = await fetch(path, { credentials: 'same-origin', ...options });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = new Error(data?.error?.message ?? `请求失败（HTTP ${res.status}）`) as any;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function show(id: string) {
+    for (const v of ['d-loading', 'd-guest', 'd-user', 'd-done']) {
+      document.getElementById(v)!.classList.toggle('hidden', v !== id);
+    }
+  }
+
+  function showError(msg: string) {
+    const el = document.getElementById('d-error')!;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // 从 query 读取授权码，兼容 ?code= 与 ?user_code=
+  const params = new URLSearchParams(window.location.search);
+  const code = (params.get('code') ?? params.get('user_code') ?? '').trim();
+  document.getElementById('device-code')!.textContent = code || '未提供';
+
+  async function init() {
+    if (!code) {
+      show('d-user');
+      showError('链接中缺少授权码（?code=XXXX-XXXX），请从终端提示的链接重新进入。');
+      (document.getElementById('d-approve-btn') as HTMLButtonElement).disabled = true;
+      return;
+    }
+    try {
+      const me = await api('/api/v1/auth/me');
+      document.getElementById('d-nickname')!.textContent = me.nickname ?? '观猹用户';
+      show('d-user');
+    } catch (e: any) {
+      if (e.status === 401) {
+        show('d-guest');
+      } else {
+        show('d-guest');
+        showError(e.message);
+      }
+    }
+  }
+
+  // 未登录 → 记住授权码，跳观猹 OAuth，回跳由控制台首页接管
+  document.getElementById('d-login-btn')!.addEventListener('click', () => {
+    sessionStorage.setItem('tt2.pendingDeviceCode', code);
+    window.location.href = '/api/v1/auth/watcha/login';
+  });
+
+  // 确认授权 → POST /api/v1/auth/device/approve?user_code=XXXX-XXXX
+  document.getElementById('d-approve-btn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('d-approve-btn') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = '授权中…';
+    try {
+      await api(`/api/v1/auth/device/approve?user_code=${encodeURIComponent(code)}`, { method: 'POST' });
+      show('d-done');
+    } catch (e: any) {
+      showError(e.message);
+      btn.disabled = false;
+      btn.textContent = '确认授权';
+    }
+  });
+
+  init();
+</script>

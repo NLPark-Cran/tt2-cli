@@ -1,0 +1,63 @@
+---
+// 文档首页
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const cards = [
+  {
+    href: '/docs/quickstart/',
+    title: '快速上手',
+    desc: '3 分钟完成：安装 CLI → tt2 login → tt2 push，让你的第一个站点上线。',
+  },
+  {
+    href: '/docs/cli/',
+    title: 'CLI 命令参考',
+    desc: 'login / push / sites / domain 等全部命令的完整参数说明与 --json 模式。',
+  },
+  {
+    href: '/docs/domain/',
+    title: '自备域名指南',
+    desc: '把自有域名 CNAME 到 lhub，附阿里云 / DNSPod / Cloudflare 填写示例。',
+  },
+  {
+    href: '/docs/standards/',
+    title: '推送标准',
+    desc: '产物要求、50MB 限制、文件类型白名单，以及猹询码会做的自动修补。',
+  },
+  {
+    href: '/docs/policy/',
+    title: '内容政策',
+    desc: '允许与禁止的内容、处置流程与滥用举报渠道 abuse@tt2.li。',
+  },
+];
+---
+
+<DocsLayout title="tt2-cli 文档" description="tt2-cli 官方文档：快速上手、CLI 命令参考、自备域名指南、推送标准与内容政策。">
+  <p>
+    欢迎使用 tt2-cli —— <a href="https://lhub.tt2.li">lhub.tt2.li</a> 静态托管网络的命令行工具包。
+    Agent 用 <code>tt2</code> CLI，人类用<a href="/console/">控制台</a>，
+    把静态站点部署到云端边缘节点。所有部署都由服务端「猹询码」中介审查，你的 Agent 从不直接接触服务器。
+  </p>
+
+  <div class="not-prose mt-8 grid gap-4 sm:grid-cols-2">
+    {
+      cards.map((c) => (
+        <a
+          href={c.href}
+          class="group rounded-xl border border-ink-700 bg-ink-900/60 p-5 transition-colors hover:border-brand-500/40"
+        >
+          <h3 class="font-semibold text-brand-200 group-hover:text-brand-300">
+            {c.title} <span class="font-mono text-brand-500">→</span>
+          </h3>
+          <p class="mt-2 text-sm leading-relaxed text-zinc-400">{c.desc}</p>
+        </a>
+      ))
+    }
+  </div>
+
+  <h2>从哪里开始？</h2>
+  <ul>
+    <li>第一次使用：读<a href="/docs/quickstart/">快速上手</a>。</li>
+    <li>给 Agent 集成：读<a href="/docs/cli/">CLI 命令参考</a>，所有命令支持 <code>--json</code>。</li>
+    <li>要用自己的域名：读<a href="/docs/domain/">自备域名指南</a>。</li>
+  </ul>
+</DocsLayout>

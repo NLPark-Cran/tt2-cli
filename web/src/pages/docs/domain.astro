@@ -1,0 +1,99 @@
+---
+// 自备域名 DNS 指南
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="自备域名指南" description="把自有域名绑定到 lhub 站点：推荐 CNAME 到 <name>.lhub.tt2.li，根域使用 A 记录 38.76.172.131，附阿里云 / 腾讯云DNSPod / Cloudflare 填写示例。">
+  <p>
+    每个站点默认拥有 <code>&lt;name&gt;.lhub.tt2.li</code> 免费域名。如需使用自有域名（如
+    <code>app.example.com</code>），按本页操作即可，<strong>Let's Encrypt 证书自动签发与续期</strong>。
+  </p>
+
+  <h2>第一步：绑定域名</h2>
+  <pre><code>tt2 domain add --name myapp --domain app.example.com</code></pre>
+  <p>也可以在<a href="/console/">控制台</a>的站点详情中绑定。绑定后 DNS 未生效前，域名状态为「待验证」。</p>
+
+  <h2>第二步：配置 DNS</h2>
+  <h3>推荐：子域名使用 CNAME</h3>
+  <p>
+    对于 <code>app.example.com</code>、<code>www.example.com</code> 这类子域名，
+    <strong>推荐添加 CNAME 记录指向 <code>&lt;name&gt;.lhub.tt2.li</code></strong>。
+    这样节点 IP 变化时你无需任何改动。
+  </p>
+  <table>
+    <tr><th>记录类型</th><th>主机记录</th><th>记录值</th><th>TTL</th></tr>
+    <tr><td>CNAME</td><td>app</td><td>myapp.lhub.tt2.li</td><td>600（或默认）</td></tr>
+  </table>
+
+  <h3>根域（裸域）使用 A 记录</h3>
+  <p>
+    根域（<code>example.com</code>）按 DNS 标准不能直接 CNAME，请使用 <strong>A 记录指向
+    <code>38.76.172.131</code></strong>：
+  </p>
+  <table>
+    <tr><th>记录类型</th><th>主机记录</th><th>记录值</th><th>TTL</th></tr>
+    <tr><td>A</td><td>@</td><td>38.76.172.131</td><td>600（或默认）</td></tr>
+  </table>
+  <p>
+    若你的 DNS 服务商支持 <code>ALIAS</code> / <code>ANAME</code> / CNAME Flattening（如 Cloudflare），
+    根域也可以直接指向 <code>myapp.lhub.tt2.li</code>。
+  </p>
+
+  <h2>各 DNS 服务商填写位置</h2>
+
+  <h3>阿里云（云解析 DNS）</h3>
+  <ol>
+    <li>登录阿里云控制台 → 「域名与网站」→ 「云解析 DNS」→ 选择你的域名 → 「解析设置」。</li>
+    <li>点击「添加记录」，按下表填写：</li>
+  </ol>
+  <table>
+    <tr><th>表单字段</th><th>子域名（CNAME）</th><th>根域（A）</th></tr>
+    <tr><td>记录类型</td><td>CNAME</td><td>A</td></tr>
+    <tr><td>主机记录</td><td>app</td><td>@</td></tr>
+    <tr><td>解析线路</td><td>默认</td><td>默认</td></tr>
+    <tr><td>记录值</td><td>myapp.lhub.tt2.li</td><td>38.76.172.131</td></tr>
+    <tr><td>TTL</td><td>10 分钟</td><td>10 分钟</td></tr>
+  </table>
+
+  <h3>腾讯云 DNSPod</h3>
+  <ol>
+    <li>登录 DNSPod 控制台 → 「我的域名」→ 点击域名进入「记录管理」。</li>
+    <li>点击「添加记录」，按下表填写：</li>
+  </ol>
+  <table>
+    <tr><th>表单字段</th><th>子域名（CNAME）</th><th>根域（A）</th></tr>
+    <tr><td>记录类型</td><td>CNAME</td><td>A</td></tr>
+    <tr><td>主机记录</td><td>app</td><td>@</td></tr>
+    <tr><td>线路类型</td><td>默认</td><td>默认</td></tr>
+    <tr><td>记录值</td><td>myapp.lhub.tt2.li</td><td>38.76.172.131</td></tr>
+    <tr><td>TTL</td><td>600</td><td>600</td></tr>
+  </table>
+
+  <h3>Cloudflare</h3>
+  <ol>
+    <li>登录 Cloudflare Dashboard → 选择站点 → 左侧「DNS」→「Records」→「Add record」。</li>
+    <li>按下表填写，<strong>代理状态可任选</strong>（开启橙色云朵代理亦可正常工作）：</li>
+  </ol>
+  <table>
+    <tr><th>表单字段</th><th>子域名（CNAME）</th><th>根域</th></tr>
+    <tr><td>Type</td><td>CNAME</td><td>CNAME（利用 CNAME Flattening）或 A</td></tr>
+    <tr><td>Name</td><td>app</td><td>@</td></tr>
+    <tr><td>Target / IPv4</td><td>myapp.lhub.tt2.li</td><td>myapp.lhub.tt2.li 或 38.76.172.131</td></tr>
+    <tr><td>Proxy status</td><td colspan="2">DNS only（灰云）或 Proxied（橙云）均可</td></tr>
+  </table>
+
+  <h2>第三步：验证与证书</h2>
+  <p>DNS 生效后（通常几分钟，最长 24 小时），运行：</p>
+  <pre><code>tt2 domain check --name myapp --domain app.example.com</code></pre>
+  <p>
+    验证通过后系统会<strong>自动向 Let's Encrypt 申请证书</strong>，一般 1–2 分钟内完成，
+    此后 https://app.example.com 即可访问。证书到期前会自动续期，无需任何操作。
+  </p>
+
+  <h2>排查</h2>
+  <ul>
+    <li><strong>check 一直不通过</strong>：用 <code>dig app.example.com +short</code> 确认解析值正确；注意 DNS 缓存与 TTL。</li>
+    <li><strong>证书未签发</strong>：确认 80/443 端口对该域名可达，且未在其他服务商处开启强制跳转。</li>
+    <li><strong>Cloudflare 用户</strong>：若开启代理，SSL/TLS 模式建议设为「Full」。</li>
+  </ul>
+</DocsLayout>

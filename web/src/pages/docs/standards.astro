@@ -1,0 +1,53 @@
+---
+// 推送标准
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="推送标准" description="tt2 push 的产物要求：纯静态、必须含 index.html、单包 ≤50MB、文件类型白名单，以及猹询码会做的自动修补。">
+  <p>
+    所有 <code>tt2 push</code> 提交的产物都会经过服务端「猹询码」的审查与适配。
+    符合以下标准可确保一次通过；不满足标准时猹询码会尝试自动修补，修补不了则拒绝并说明原因。
+  </p>
+
+  <h2>基本要求</h2>
+  <table>
+    <tr><th>项目</th><th>要求</th></tr>
+    <tr><td>产物形态</td><td><strong>纯静态文件</strong>：HTML / CSS / JS / 图片 / 字体等。不含任何服务端代码（PHP / Node / Python 等不会被执行，也不会被上传）</td></tr>
+    <tr><td>入口文件</td><td>目录根部<strong>必须包含 <code>index.html</code></strong></td></tr>
+    <tr><td>总大小</td><td>单包 <strong>≤ 50 MB</strong>（压缩后）</td></tr>
+    <tr><td>单文件</td><td>建议 ≤ 10 MB；超大媒体请使用外链或压缩</td></tr>
+    <tr><td>路径</td><td>相对路径引用资源；避免以 <code>/</code> 开头的绝对路径指向域外资源</td></tr>
+  </table>
+
+  <h2>文件类型白名单</h2>
+  <p>以下扩展名允许上传，其余类型将被猹询码剔除并在任务结果中列出：</p>
+  <table>
+    <tr><th>类别</th><th>扩展名</th></tr>
+    <tr><td>页面与样式</td><td><code>.html</code> <code>.htm</code> <code>.css</code> <code>.js</code> <code>.mjs</code> <code>.map</code> <code>.json</code> <code>.xml</code> <code>.txt</code> <code>.md</code></td></tr>
+    <tr><td>图片</td><td><code>.png</code> <code>.jpg</code> <code>.jpeg</code> <code>.gif</code> <code>.webp</code> <code>.avif</code> <code>.svg</code> <code>.ico</code></td></tr>
+    <tr><td>字体</td><td><code>.woff</code> <code>.woff2</code> <code>.ttf</code> <code>.otf</code> <code>.eot</code></td></tr>
+    <tr><td>媒体</td><td><code>.mp3</code> <code>.mp4</code> <code>.webm</code> <code>.ogg</code> <code>.wav</code></td></tr>
+    <tr><td>文档与数据</td><td><code>.pdf</code> <code>.zip</code> <code>.wasm</code> <code>.webmanifest</code></td></tr>
+  </table>
+  <p>可执行脚本与服务器侧文件（<code>.php</code> <code>.py</code> <code>.sh</code> <code>.env</code> <code>.htaccess</code> 等）一律拒绝上传。</p>
+
+  <h2>猹询码会做的自动修补</h2>
+  <p>产物进入审查队列后，猹询码（cran-code lite）会执行：</p>
+  <ul>
+    <li><strong>安全扫描</strong>：检测恶意脚本、挖矿代码、钓鱼表单、混淆载荷等，命中即拒绝并在任务结果中给出原因。</li>
+    <li><strong>缺失入口修补</strong>：目录中只有一个明显的入口 HTML（如 <code>home.html</code>）时，自动生成 <code>index.html</code> 跳转页。</li>
+    <li><strong>编码修正</strong>：为缺失 <code>&lt;meta charset&gt;</code> 的 HTML 注入 UTF-8 声明，避免中文乱码。</li>
+    <li><strong>SPA 适配</strong>：携带 <code>--spa</code> 时自动写入 404 回退规则。</li>
+    <li><strong>缓存头优化</strong>：为带哈希指纹的静态资源设置长缓存，为 HTML 设置协商缓存。</li>
+    <li><strong>白名单过滤</strong>：剔除不允许的文件类型，并在 <code>tt2 reply &lt;task_id&gt;</code> 的回复中逐项说明。</li>
+  </ul>
+  <p>所有修补都会记录在任务结果里，Agent 可通过 <code>tt2 reply --json</code> 读取完整报告。</p>
+
+  <h2>常见拒绝原因</h2>
+  <ul>
+    <li>缺少 <code>index.html</code> 且无法推断入口；</li>
+    <li>压缩包超过 50 MB；</li>
+    <li>包含可执行代码或恶意特征；</li>
+    <li>内容违反<a href="/docs/policy/">内容政策</a>。</li>
+  </ul>
+</DocsLayout>

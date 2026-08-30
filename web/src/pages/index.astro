@@ -1,0 +1,327 @@
+---
+// 落地页
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Terminal from '../components/Terminal.astro';
+import AsciiDivider from '../components/AsciiDivider.astro';
+
+// 三步上手
+const steps = [
+  {
+    num: '01',
+    title: '安装 CLI',
+    desc: '一条命令装好 tt2，支持 npm 与一键脚本，macOS / Linux / Windows 全平台。',
+    code: 'npm install -g @tt2/cli',
+  },
+  {
+    num: '02',
+    title: '登录观猹',
+    desc: 'tt2 login 会发起设备码授权，浏览器里点一下确认，CLI 即拿到凭证。',
+    code: 'tt2 login',
+  },
+  {
+    num: '03',
+    title: '推送上线',
+    desc: '指定产物目录和名字，猹询码审查适配后直达边缘节点，秒级可访问。',
+    code: 'tt2 push ./dist --name myapp',
+  },
+];
+
+// 特性网格
+const features = [
+  {
+    title: '免费三级域名',
+    desc: '每个站点自动获得 <name>.lhub.tt2.li 免费域名，无需任何配置，上线即可分享。',
+    icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.93 9h-3.02a15.7 15.7 0 0 0-1.2-5.02A8.02 8.02 0 0 1 19.93 11ZM12 4.06c.83 1.03 1.8 2.9 1.98 4.94h-3.96c.18-2.04 1.15-3.9 1.98-4.94ZM4.07 13h3.02c.13 2.02.6 3.7 1.2 5.02A8.02 8.02 0 0 1 4.07 13Zm3.02-2H4.07a8.02 8.02 0 0 1 4.22-5.02A15.7 15.7 0 0 0 7.09 11Zm4.91 8.94c-.83-1.03-1.8-2.9-1.98-4.94h3.96c-.18 2.04-1.15 3.9-1.98 4.94ZM8.31 18.02a15.7 15.7 0 0 1-1.2-5.02h9.78a15.7 15.7 0 0 1-1.2 5.02 8.02 8.02 0 0 1-4.68 1.6 8.02 8.02 0 0 1-2.7-1.6Zm7.4-12.04a15.7 15.7 0 0 1 1.2 5.02h-3.02a13.9 13.9 0 0 0-1.8-4.42 8.1 8.1 0 0 1 3.62-.58Z',
+  },
+  {
+    title: '自动 SSL 证书',
+    desc: '全自动 Let\'s Encrypt 证书签发与续期，全站 HTTPS，你永远不用碰证书文件。',
+    icon: 'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-2 15-4-4 1.41-1.41L10 13.17l6.59-6.59L18 8l-8 8Z',
+  },
+  {
+    title: '安全隔离审查',
+    desc: 'Agent 从不直接接触服务器，所有部署经猹询码中介审查、修补与适配后才可落地。',
+    icon: 'M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3Zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11V12Z',
+  },
+  {
+    title: 'TokenPay 计费',
+    desc: '部署任务消耗你自己的 TokenPay（TokenDance）模型额度；额度耗尽自动切换全平台共享免费任务池。',
+    icon: 'M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10Zm2 0v9h9c-.5-4.75-4.25-8.5-9-9Zm0 11v9c4.75-.5 8.5-4.25 9-9h-9Z',
+  },
+  {
+    title: '多节点边缘网络',
+    desc: '站点分发至云端边缘节点，就近访问、故障隔离。节点网络持续扩容中。',
+    icon: 'M12 2a4 4 0 0 1 4 4 4 4 0 0 1-.74 2.32l3.02 3.02A4 4 0 0 1 20 11a4 4 0 1 1-2.68-1.03l-3-3A4 4 0 0 1 12 8a4 4 0 0 1-2.32-.74l-3.02 3.02A4 4 0 0 1 7 11a4 4 0 1 1-2.68-1.03l3-3A4 4 0 0 1 8 6a4 4 0 0 1 4-4Z',
+  },
+  {
+    title: 'Agent 原生设计',
+    desc: '全部命令支持 --json 结构化输出，状态查询、任务跟踪、域名管理均可被 Agent 程序化消费。',
+    icon: 'M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2ZM6.41 15.41 5 14l3-3-3-3 1.41-1.41L10.83 11l-4.42 4.41ZM18 16h-6v-2h6v2Z',
+  },
+];
+
+// 节点列表
+const nodes = [
+  { id: 'node-1', scope: '*.lhub.tt2.li', status: '运行中', region: '默认节点' },
+];
+---
+
+<BaseLayout
+  title="首页"
+  description="tt2-cli —— 让 Agent 一句话上线你的产品。猹询码中介审查的静态托管网络，免费域名、自动 SSL、边缘节点分发。"
+>
+  <!-- ============ Hero ============ -->
+  <section class="relative overflow-hidden">
+    <!-- Hero 背景：CSS 渐变 + AI 生成的边缘节点网络视觉（/assets/hero.webp，低透明度衬底） -->
+    <div
+      class="pointer-events-none absolute inset-0 -z-10"
+      style="background: radial-gradient(ellipse 60% 45% at 50% 0%, rgba(34,197,94,0.14), transparent 70%);"
+      aria-hidden="true"
+    >
+    </div>
+    <img
+      src="/assets/hero.webp"
+      alt=""
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-25 [mask-image:linear-gradient(to_bottom,black_0%,transparent_75%)]"
+    />
+
+    <div class="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-2 lg:pt-24">
+      <div class="animate-rise">
+        <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/5 px-3 py-1 font-mono text-xs text-brand-300">
+          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400"></span>
+          lhub.tt2.li · 猹询码驱动的静态托管网络
+        </p>
+        <h1 class="text-4xl font-bold leading-tight tracking-tight text-brand-50 sm:text-5xl">
+          让 Agent <span class="text-brand-400">一句话</span><br />上线你的产品
+        </h1>
+        <p class="mt-6 max-w-lg text-base leading-relaxed text-zinc-400">
+          tt2-cli 是 lhub.tt2.li 静态托管网络的命令行工具包。你的 Agent 调用
+          <code class="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-sm text-brand-300">tt2</code>，
+          猹询码在服务端完成审查与适配，静态站点秒级抵达边缘节点—— Agent 从不直接接触服务器。
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a
+            href="/docs/quickstart/"
+            class="rounded-lg bg-brand-500 px-5 py-2.5 font-medium text-ink-950 transition-colors hover:bg-brand-400"
+          >
+            3 分钟上手 →
+          </a>
+          <a
+            href="/console/"
+            class="rounded-lg border border-ink-500 px-5 py-2.5 font-medium text-zinc-300 transition-colors hover:border-brand-500/60 hover:text-brand-300"
+          >
+            打开控制台
+          </a>
+        </div>
+        <p class="mt-6 font-mono text-xs text-zinc-600">
+          ───────────────────────────────<br />
+          免费三级域名 · 自动 SSL · TokenPay 计费 · 共享免费任务池
+        </p>
+      </div>
+
+      <div class="animate-rise" style="animation-delay: 0.15s;">
+        <Terminal
+          title="agent — tt2"
+          lines={[
+            { cmd: 'tt2 push ./dist --name myapp' },
+            { out: '▸ 打包 ./dist (1.2 MB, 34 个文件)' },
+            { out: '▸ 猹询码审查中... 通过 ✓ 已自动修补 2 处' },
+            { out: '▸ 分发至边缘节点 node-1 ✓' },
+            { out: '' },
+            { out: '✓ 已上线: https://myapp.lhub.tt2.li' },
+            { out: '  证书: Let\'s Encrypt (自动续期)' },
+          ]}
+        />
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 三步上手 ============ -->
+  <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+    <AsciiDivider label="QUICKSTART" class="mb-12" />
+    <h2 class="text-center text-3xl font-bold text-brand-50">三步，把站点推上边缘</h2>
+    <p class="mt-3 text-center text-zinc-500">从安装到上线，不超过三分钟。</p>
+
+    <div class="mt-12 grid gap-6 md:grid-cols-3">
+      {
+        steps.map((s, i) => (
+          <div
+            class="animate-rise rounded-xl border border-ink-700 bg-ink-900/60 p-6 transition-colors hover:border-brand-500/40"
+            style={`animation-delay: ${i * 0.1}s;`}
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-3xl font-bold text-brand-500/30">{s.num}</span>
+              {i < steps.length - 1 && (
+                <span class="hidden font-mono text-ink-500 md:inline" aria-hidden="true">──▶</span>
+              )}
+            </div>
+            <h3 class="mt-4 text-lg font-semibold text-brand-100">{s.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-zinc-400">{s.desc}</p>
+            <div class="mt-4 overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-[13px]">
+              <span class="mr-2 select-none text-brand-500">$</span>
+              <span class="text-brand-200">{s.code}</span>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ============ 猹询码工作原理 ============ -->
+  <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+    <AsciiDivider label="HOW IT WORKS" class="mb-12" />
+    <h2 class="text-center text-3xl font-bold text-brand-50">猹询码：Agent 与服务器之间的安全中介</h2>
+    <p class="mx-auto mt-3 max-w-2xl text-center text-zinc-500">
+      你的 Agent 从不直接持有服务器凭据。每次部署都由服务端的「猹询码」（cran-code lite，glm-5.3-flash 驱动）
+      代为审查、修补、适配，再落地到边缘节点。
+    </p>
+
+    <!-- 纯 HTML/CSS 图解：Agent → 猹询码 → 边缘节点 -->
+    <div class="mx-auto mt-14 flex max-w-4xl flex-col items-stretch gap-4 md:flex-row md:items-center">
+      <!-- 节点 A：用户 Agent -->
+      <div class="flex-1 rounded-xl border border-ink-600 bg-ink-900/70 p-5 text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-ink-500 bg-ink-800">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 fill-zinc-300" aria-hidden="true">
+            <path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2ZM6.41 15.41 5 14l3-3-3-3 1.41-1.41L10.83 11l-4.42 4.41ZM18 16h-6v-2h6v2Z" />
+          </svg>
+        </div>
+        <h3 class="mt-3 font-semibold text-zinc-100">你的 Agent</h3>
+        <p class="mt-1 font-mono text-xs text-zinc-500">tt2 push / status / domain</p>
+        <p class="mt-2 text-xs leading-relaxed text-zinc-400">只持有 CLI Token<br />不接触任何服务器凭据</p>
+      </div>
+
+      <!-- 箭头 1 -->
+      <div class="flex flex-col items-center justify-center gap-1 md:px-2" aria-hidden="true">
+        <span class="font-mono text-[10px] text-zinc-600">① 提交产物</span>
+        <svg class="h-6 w-10 rotate-90 text-brand-500 md:rotate-0" viewBox="0 0 40 24" fill="none">
+          <path d="M0 12h34m0 0-8-8m8 8-8 8" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </div>
+
+      <!-- 节点 B：猹询码（高亮） -->
+      <div class="relative flex-1 rounded-xl border border-brand-500/50 bg-brand-500/5 p-5 text-center shadow-[0_0_40px_-10px_rgba(34,197,94,0.4)]">
+        <span class="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-brand-500 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-ink-950">
+          服务端审查
+        </span>
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-brand-500/60 bg-brand-500/15">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 fill-brand-400" aria-hidden="true">
+            <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm-1.06 13.54L7.4 11l1.41-1.41 2.12 2.12 4.24-4.24 1.41 1.41-5.64 5.66Z" />
+          </svg>
+        </div>
+        <h3 class="mt-3 font-semibold text-brand-200">猹询码</h3>
+        <p class="mt-1 font-mono text-xs text-brand-500/70">cran-code lite · glm-5.3-flash</p>
+        <ul class="mt-2 space-y-0.5 text-xs leading-relaxed text-zinc-400">
+          <li>✓ 安全审查与白名单校验</li>
+          <li>✓ 自动修补（注入 index.html 等）</li>
+          <li>✓ 适配边缘节点格式</li>
+        </ul>
+      </div>
+
+      <!-- 箭头 2 -->
+      <div class="flex flex-col items-center justify-center gap-1 md:px-2" aria-hidden="true">
+        <span class="font-mono text-[10px] text-zinc-600">② 分发落地</span>
+        <svg class="h-6 w-10 rotate-90 text-brand-500 md:rotate-0" viewBox="0 0 40 24" fill="none">
+          <path d="M0 12h34m0 0-8-8m8 8-8 8" stroke="currentColor" stroke-width="2" />
+        </svg>
+      </div>
+
+      <!-- 节点 C：边缘节点 -->
+      <div class="flex-1 rounded-xl border border-ink-600 bg-ink-900/70 p-5 text-center">
+        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-ink-500 bg-ink-800">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 fill-zinc-300" aria-hidden="true">
+            <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm7.93 9h-3.02a15.7 15.7 0 0 0-1.2-5.02A8.02 8.02 0 0 1 19.93 11ZM12 4.06c.83 1.03 1.8 2.9 1.98 4.94h-3.96c.18-2.04 1.15-3.9 1.98-4.94Zm-2.91 8.94H4.07a8.02 8.02 0 0 1 4.22 5.02A15.7 15.7 0 0 0 9.09 13Zm2.91 6.94c-.83-1.03-1.8-2.9-1.98-4.94h3.96c-.18 2.04-1.15 3.9-1.98 4.94Z" />
+          </svg>
+        </div>
+        <h3 class="mt-3 font-semibold text-zinc-100">边缘节点</h3>
+        <p class="mt-1 font-mono text-xs text-zinc-500">node-1 · *.lhub.tt2.li</p>
+        <p class="mt-2 text-xs leading-relaxed text-zinc-400">HTTPS 自动证书<br />秒级全球可访问</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 特性网格 ============ -->
+  <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+    <AsciiDivider label="FEATURES" class="mb-12" />
+    <h2 class="text-center text-3xl font-bold text-brand-50">为 Agent 工作流而生</h2>
+    <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((f) => (
+          <div class="group rounded-xl border border-ink-700 bg-ink-900/60 p-6 transition-all hover:-translate-y-0.5 hover:border-brand-500/40">
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg border border-brand-500/30 bg-brand-500/10 transition-colors group-hover:bg-brand-500/20">
+              <svg viewBox="0 0 24 24" class="h-5 w-5 fill-brand-400" aria-hidden="true">
+                <path d={f.icon} />
+              </svg>
+            </div>
+            <h3 class="mt-4 font-semibold text-brand-100">{f.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-zinc-400">{f.desc}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ============ 节点网络 & 赞助商招募 ============ -->
+  <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+    <AsciiDivider label="NETWORK" class="mb-12" />
+    <div class="grid gap-8 lg:grid-cols-2">
+      <div>
+        <h2 class="text-2xl font-bold text-brand-50">节点网络</h2>
+        <p class="mt-2 text-sm text-zinc-500">当前在线的边缘节点。所有免费三级域名由节点网络统一承载。</p>
+        <div class="mt-6 space-y-3">
+          {
+            nodes.map((n) => (
+              <div class="flex items-center justify-between rounded-xl border border-ink-700 bg-ink-900/60 px-5 py-4">
+                <div>
+                  <p class="font-mono text-sm font-semibold text-brand-300">{n.id}</p>
+                  <p class="mt-0.5 font-mono text-xs text-zinc-500">{n.scope} · {n.region}</p>
+                </div>
+                <span class="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-2.5 py-1 text-xs text-brand-300">
+                  <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
+                  {n.status}
+                </span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-brand-500/30 bg-gradient-to-br from-brand-500/10 to-transparent p-8">
+        <h2 class="text-2xl font-bold text-brand-50">成为节点赞助商</h2>
+        <p class="mt-3 text-sm leading-relaxed text-zinc-400">
+          lhub 是一个由社区算力驱动的静态托管网络。如果你有一台空闲 VPS，
+          欢迎把它接入节点网络——让更多 Agent 的作品在你的机器上被世界访问。
+        </p>
+        <ul class="mt-4 space-y-2 text-sm text-zinc-400">
+          <li class="flex gap-2"><span class="text-brand-400">▸</span> 最低要求：1C1G、10GB 磁盘、公网 IP</li>
+          <li class="flex gap-2"><span class="text-brand-400">▸</span> 赞助商节点将展示在官网与本列表</li>
+          <li class="flex gap-2"><span class="text-brand-400">▸</span> 赞助者优先获得平台新功能体验资格</li>
+        </ul>
+        <a
+          href="https://github.com/NLPark-Cran/tt2-cli"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-6 inline-block rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-ink-950 transition-colors hover:bg-brand-400"
+        >
+          在 GitHub 上联系我们 →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 底部 CTA ============ -->
+  <section class="mx-auto max-w-6xl px-4 pb-8 pt-8 sm:px-6">
+    <div class="rounded-2xl border border-ink-700 bg-ink-900/60 px-6 py-14 text-center">
+      <p class="font-mono text-sm text-brand-500">$ tt2 push ./dist --name your-product</p>
+      <h2 class="mt-4 text-3xl font-bold text-brand-50">准备好让你的 Agent 上线第一个站点了吗？</h2>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a href="/docs/quickstart/" class="rounded-lg bg-brand-500 px-6 py-3 font-medium text-ink-950 transition-colors hover:bg-brand-400">
+          阅读快速上手
+        </a>
+        <a href="/console/" class="rounded-lg border border-ink-500 px-6 py-3 font-medium text-zinc-300 transition-colors hover:border-brand-500/60 hover:text-brand-300">
+          进入控制台
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

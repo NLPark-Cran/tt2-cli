@@ -1,0 +1,396 @@
+---
+// 控制台：客户端 JS 调同源 /api/v1/*，cookie 鉴权
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="控制台" description="tt2-cli 控制台：TokenPay 连接、CLI Token 管理、站点与部署任务一览。">
+  <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+    <h1 class="text-3xl font-bold text-brand-50">控制台</h1>
+    <p class="mt-1 font-mono text-xs text-ink-500">{'─'.repeat(40)}</p>
+
+    <!-- 加载中 -->
+    <div id="view-loading" class="mt-16 flex flex-col items-center gap-3 text-zinc-500">
+      <span class="h-6 w-6 animate-spin rounded-full border-2 border-ink-500 border-t-brand-400"></span>
+      <p class="font-mono text-sm">$ loading session...</p>
+    </div>
+
+    <!-- 未登录 -->
+    <div id="view-guest" class="mt-16 hidden text-center">
+      <p class="font-mono text-sm text-brand-500">$ whoami → 401 unauthorized</p>
+      <h2 class="mt-4 text-2xl font-bold text-brand-50">你还未登录</h2>
+      <p class="mt-2 text-zinc-400">使用观猹账号登录，管理你的站点、Token 与部署任务。</p>
+      <a
+        href="/api/v1/auth/watcha/login"
+        class="mt-8 inline-flex items-center gap-2 rounded-lg bg-brand-500 px-6 py-3 font-medium text-ink-950 transition-colors hover:bg-brand-400"
+      >
+        <svg viewBox="0 0 24 24" class="h-5 w-5 fill-current" aria-hidden="true">
+          <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 14-4-4 1.41-1.41L11 13.17l4.59-4.58L17 10l-6 6Z" />
+        </svg>
+        使用观猹登录
+      </a>
+    </div>
+
+    <!-- 已登录 -->
+    <div id="view-user" class="mt-8 hidden space-y-8">
+      <!-- 用户条 + TokenPay 卡片 -->
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="flex items-center gap-4 rounded-xl border border-ink-700 bg-ink-900/60 p-5">
+          <img id="user-avatar" alt="头像" class="h-12 w-12 rounded-full border border-ink-600 bg-ink-800 object-cover" />
+          <div>
+            <p id="user-nickname" class="font-semibold text-brand-50"></p>
+            <p class="font-mono text-xs text-zinc-500">观猹 OAuth · watcha.cn</p>
+          </div>
+        </div>
+
+        <!-- TokenPay 卡片 -->
+        <div class="rounded-xl border border-ink-700 bg-ink-900/60 p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-brand-100">TokenPay 计费</h2>
+            <span id="tp-badge"></span>
+          </div>
+          <p class="mt-2 text-sm leading-relaxed text-zinc-400">
+            部署任务消耗你的 TokenPay（TokenDance）模型额度；未连接或额度耗尽时使用全平台共享免费任务池。
+          </p>
+          <div id="tp-action" class="mt-4"></div>
+        </div>
+      </div>
+
+      <!-- CLI Token 管理 -->
+      <section class="rounded-xl border border-ink-700 bg-ink-900/60 p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="font-semibold text-brand-100">CLI Token</h2>
+            <p class="mt-1 text-sm text-zinc-500">供 <code class="font-mono text-brand-300">tt2 login --token</code> 或 CI 环境使用。</p>
+          </div>
+          <form id="token-create-form" class="flex gap-2">
+            <input
+              id="token-name"
+              type="text"
+              required
+              maxlength="40"
+              placeholder="Token 备注名，如 laptop"
+              class="w-48 rounded-lg border border-ink-600 bg-ink-950 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-brand-500/60"
+            />
+            <button type="submit" class="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-ink-950 transition-colors hover:bg-brand-400">
+              创建
+            </button>
+          </form>
+        </div>
+
+        <!-- 新 Token 一次性展示 -->
+        <div id="token-once" class="mt-4 hidden rounded-lg border border-brand-500/50 bg-brand-500/10 p-4">
+          <p class="text-sm font-medium text-brand-300">✓ Token 已创建 —— 仅此一次显示，请立即复制保存：</p>
+          <div class="mt-2 flex items-center gap-2">
+            <code id="token-once-value" class="flex-1 overflow-x-auto rounded bg-ink-950 px-3 py-2 font-mono text-sm text-brand-200"></code>
+            <button id="token-copy-btn" class="shrink-0 rounded-lg border border-brand-500/50 px-3 py-2 text-sm text-brand-300 transition-colors hover:bg-brand-500/20">
+              复制
+            </button>
+          </div>
+        </div>
+
+        <div id="token-list" class="mt-4 divide-y divide-ink-700/60"></div>
+      </section>
+
+      <!-- 站点列表 -->
+      <section class="rounded-xl border border-ink-700 bg-ink-900/60 p-5">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold text-brand-100">站点</h2>
+          <button data-reload="sites" class="font-mono text-xs text-zinc-500 transition-colors hover:text-brand-300">↻ 刷新</button>
+        </div>
+        <div id="site-list" class="mt-4 divide-y divide-ink-700/60"></div>
+      </section>
+
+      <!-- 任务列表 -->
+      <section class="rounded-xl border border-ink-700 bg-ink-900/60 p-5">
+        <div class="flex items-center justify-between">
+          <h2 class="font-semibold text-brand-100">部署任务</h2>
+          <button data-reload="tasks" class="font-mono text-xs text-zinc-500 transition-colors hover:text-brand-300">↻ 刷新</button>
+        </div>
+        <div id="task-list" class="mt-4 divide-y divide-ink-700/60"></div>
+      </section>
+    </div>
+
+    <!-- 全局错误提示 -->
+    <div id="toast" class="fixed bottom-6 left-1/2 z-50 hidden max-w-md -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/90 px-4 py-3 text-sm text-red-200 shadow-lg"></div>
+  </div>
+</BaseLayout>
+
+<script>
+  // ================= 控制台客户端逻辑（原生 JS，cookie 鉴权） =================
+
+  /** 统一 API 封装：错误格式 {"error":{code,message}}，友好抛出 message */
+  async function api(path: string, options: RequestInit = {}): Promise<any> {
+    const res = await fetch(path, { credentials: 'same-origin', ...options });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = data?.error?.message ?? `请求失败（HTTP ${res.status}）`;
+      const err = new Error(msg) as any;
+      err.code = data?.error?.code;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function showToast(message: string) {
+    const toast = document.getElementById('toast')!;
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    clearTimeout((showToast as any)._t);
+    (showToast as any)._t = setTimeout(() => toast.classList.add('hidden'), 4000);
+  }
+
+  function esc(s: unknown): string {
+    return String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+    );
+  }
+
+  function fmtTime(iso: string | undefined): string {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? esc(iso) : d.toLocaleString('zh-CN', { hour12: false });
+  }
+
+  // 任务/站点状态徽章颜色
+  const statusStyle: Record<string, string> = {
+    online: 'border-brand-500/40 bg-brand-500/10 text-brand-300',
+    succeeded: 'border-brand-500/40 bg-brand-500/10 text-brand-300',
+    pending: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300',
+    queued: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300',
+    running: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+    deploying: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+    failed: 'border-red-500/40 bg-red-500/10 text-red-300',
+    offline: 'border-zinc-500/40 bg-zinc-500/10 text-zinc-400',
+  };
+  const statusText: Record<string, string> = {
+    online: '在线', succeeded: '成功', pending: '排队中', queued: '排队中',
+    running: '执行中', deploying: '部署中', failed: '失败', offline: '离线',
+  };
+  function badge(status: string): string {
+    const cls = statusStyle[status] ?? 'border-zinc-500/40 bg-zinc-500/10 text-zinc-400';
+    const text = statusText[status] ?? status;
+    return `<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${cls}">${esc(text)}</span>`;
+  }
+
+  // ---------------- 视图切换 ----------------
+  function show(id: string) {
+    for (const v of ['view-loading', 'view-guest', 'view-user']) {
+      document.getElementById(v)!.classList.toggle('hidden', v !== id);
+    }
+  }
+
+  // ---------------- TokenPay ----------------
+  function renderTokenPay(connected: boolean) {
+    const badgeEl = document.getElementById('tp-badge')!;
+    const actionEl = document.getElementById('tp-action')!;
+    if (connected) {
+      badgeEl.innerHTML = `<span class="inline-flex items-center gap-1.5 rounded-full border border-brand-500/40 bg-brand-500/10 px-2.5 py-0.5 text-xs text-brand-300">
+        <span class="h-1.5 w-1.5 rounded-full bg-brand-400"></span>已连接</span>`;
+      actionEl.innerHTML = `<p class="font-mono text-xs text-zinc-500">tokendance: connected ✓ 任务将优先消耗你的模型额度</p>`;
+    } else {
+      badgeEl.innerHTML = `<span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-500/40 bg-zinc-500/10 px-2.5 py-0.5 text-xs text-zinc-400">未连接</span>`;
+      actionEl.innerHTML = `<button id="tp-connect-btn" class="rounded-lg border border-brand-500/60 px-4 py-2 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/15">连接 TokenPay</button>`;
+      document.getElementById('tp-connect-btn')!.addEventListener('click', async () => {
+        try {
+          const data = await api('/api/v1/auth/tokendance/connect');
+          window.location.href = data.authorize_url;
+        } catch (e: any) {
+          showToast(e.message);
+        }
+      });
+    }
+  }
+
+  // ---------------- CLI Token ----------------
+  async function loadTokens() {
+    const list = document.getElementById('token-list')!;
+    try {
+      const tokens = await api('/api/v1/tokens');
+      if (!Array.isArray(tokens) || tokens.length === 0) {
+        list.innerHTML = `<p class="py-4 text-sm text-zinc-600">暂无 Token。创建一个，配合 <span class="font-mono">tt2 login --token</span> 在无浏览器环境登录。</p>`;
+        return;
+      }
+      list.innerHTML = tokens
+        .map(
+          (t: any) => `
+        <div class="flex items-center justify-between py-3">
+          <div>
+            <p class="text-sm font-medium text-zinc-200">${esc(t.name)}</p>
+            <p class="mt-0.5 font-mono text-xs text-zinc-500">${esc(t.prefix)}… · 创建于 ${fmtTime(t.created_at)}</p>
+          </div>
+          <button data-del-token="${esc(t.prefix)}" class="rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-red-500/50 hover:text-red-300">删除</button>
+        </div>`
+        )
+        .join('');
+      list.querySelectorAll('[data-del-token]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          const id = (btn as HTMLElement).dataset.delToken!;
+          if (!confirm('确定删除该 Token？使用它的 CLI 将立即失效。')) return;
+          try {
+            await api(`/api/v1/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            await loadTokens();
+          } catch (e: any) {
+            showToast(e.message);
+          }
+        })
+      );
+    } catch (e: any) {
+      list.innerHTML = `<p class="py-4 text-sm text-red-300">${esc(e.message)}</p>`;
+    }
+  }
+
+  function bindTokenCreate() {
+    document.getElementById('token-create-form')!.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const input = document.getElementById('token-name') as HTMLInputElement;
+      const name = input.value.trim();
+      if (!name) return;
+      try {
+        // POST 的 name 通过 query 参数传递
+        const data = await api(`/api/v1/tokens?name=${encodeURIComponent(name)}`, { method: 'POST' });
+        // token 仅显示一次，提示复制
+        document.getElementById('token-once-value')!.textContent = data.token;
+        document.getElementById('token-once')!.classList.remove('hidden');
+        input.value = '';
+        await loadTokens();
+      } catch (e: any) {
+        showToast(e.message);
+      }
+    });
+    document.getElementById('token-copy-btn')!.addEventListener('click', async () => {
+      const v = document.getElementById('token-once-value')!.textContent ?? '';
+      await navigator.clipboard.writeText(v).catch(() => {});
+      const btn = document.getElementById('token-copy-btn')!;
+      btn.textContent = '已复制 ✓';
+      setTimeout(() => (btn.textContent = '复制'), 1500);
+    });
+  }
+
+  // ---------------- 站点 ----------------
+  async function loadSites() {
+    const list = document.getElementById('site-list')!;
+    try {
+      const sites = await api('/api/v1/sites');
+      if (!Array.isArray(sites) || sites.length === 0) {
+        list.innerHTML = `<p class="py-4 text-sm text-zinc-600">还没有站点。运行 <span class="font-mono text-brand-300">$ tt2 push ./dist --name myapp</span> 部署第一个。</p>`;
+        return;
+      }
+      list.innerHTML = sites
+        .map(
+          (s: any) => `
+        <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="font-mono text-sm font-medium text-brand-300 hover:underline">${esc(s.host)}</a>
+              ${badge(s.status)}
+              ${s.spa ? '<span class="rounded border border-ink-600 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500">SPA</span>' : ''}
+            </div>
+            <p class="mt-0.5 font-mono text-xs text-zinc-600">${esc(s.name)} · 创建于 ${fmtTime(s.created_at)}</p>
+          </div>
+          <button data-del-site="${esc(s.name)}" class="rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-red-500/50 hover:text-red-300">删除</button>
+        </div>`
+        )
+        .join('');
+      list.querySelectorAll('[data-del-site]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          const name = (btn as HTMLElement).dataset.delSite!;
+          if (!confirm(`确定删除站点 ${name}？其文件与域名将立即释放，不可恢复。`)) return;
+          try {
+            await api(`/api/v1/sites/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            await loadSites();
+          } catch (e: any) {
+            showToast(e.message);
+          }
+        })
+      );
+    } catch (e: any) {
+      list.innerHTML = `<p class="py-4 text-sm text-red-300">${esc(e.message)}</p>`;
+    }
+  }
+
+  // ---------------- 任务 ----------------
+  function fmtBilling(b: any): string {
+    if (!b) return '';
+    if (b.pool === 'free' || b.free_pool) return '免费任务池';
+    const parts = [];
+    if (b.model) parts.push(b.model);
+    if (b.tokens != null) parts.push(`${b.tokens} tokens`);
+    return parts.length ? `TokenPay · ${parts.join(' · ')}` : 'TokenPay';
+  }
+
+  async function loadTasks() {
+    const list = document.getElementById('task-list')!;
+    try {
+      const tasks = await api('/api/v1/tasks');
+      if (!Array.isArray(tasks) || tasks.length === 0) {
+        list.innerHTML = `<p class="py-4 text-sm text-zinc-600">暂无部署任务。</p>`;
+        return;
+      }
+      list.innerHTML = tasks
+        .map((t: any) => {
+          const billing = fmtBilling(t.billing);
+          const detail = t.error
+            ? `<p class="mt-1 text-xs text-red-300">✗ ${esc(t.error?.message ?? t.error)}</p>`
+            : t.result?.url
+              ? `<p class="mt-1 font-mono text-xs text-zinc-500">→ ${esc(t.result.url)}</p>`
+              : '';
+          return `
+        <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-mono text-sm text-zinc-200">${esc(t.task_id)}</span>
+              ${badge(t.status)}
+            </div>
+            ${detail}
+            <p class="mt-1 font-mono text-xs text-zinc-600">
+              ${esc(t.site_name ?? '-')}${billing ? ` · ${esc(billing)}` : ''}${t.created_at ? ` · ${fmtTime(t.created_at)}` : ''}
+            </p>
+          </div>
+        </div>`;
+        })
+        .join('');
+    } catch (e: any) {
+      list.innerHTML = `<p class="py-4 text-sm text-red-300">${esc(e.message)}</p>`;
+    }
+  }
+
+  // ---------------- 入口 ----------------
+  async function init() {
+    // 若从设备确认页跳转去登录，登录回来后自动回跳设备页
+    const pendingCode = sessionStorage.getItem('tt2.pendingDeviceCode');
+    if (pendingCode) {
+      sessionStorage.removeItem('tt2.pendingDeviceCode');
+      window.location.replace(`/console/device/?code=${encodeURIComponent(pendingCode)}`);
+      return;
+    }
+
+    try {
+      const me = await api('/api/v1/auth/me');
+      (document.getElementById('user-avatar') as HTMLImageElement).src =
+        me.avatar_url || '/assets/avatar-placeholder.svg';
+      document.getElementById('user-nickname')!.textContent = me.nickname ?? '观猹用户';
+      renderTokenPay(!!me.tokendance_connected);
+      show('view-user');
+      bindTokenCreate();
+      await Promise.all([loadTokens(), loadSites(), loadTasks()]);
+    } catch (e: any) {
+      if (e.status === 401) {
+        show('view-guest');
+      } else {
+        show('view-guest');
+        showToast(e.message);
+      }
+    }
+  }
+
+  document.querySelectorAll('[data-reload]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const what = (btn as HTMLElement).dataset.reload;
+      if (what === 'sites') loadSites();
+      if (what === 'tasks') loadTasks();
+    })
+  );
+
+  init();
+</script>

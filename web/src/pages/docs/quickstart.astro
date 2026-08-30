@@ -1,0 +1,61 @@
+---
+// 快速上手：3 分钟上线
+import DocsLayout from '../../layouts/DocsLayout.astro';
+---
+
+<DocsLayout title="快速上手" description="3 分钟上手 tt2-cli：安装、登录、推送，让你的第一个站点上线 lhub.tt2.li。">
+  <p>本指南带你在 3 分钟内完成：安装 CLI → 登录观猹 → 推送第一个静态站点。</p>
+
+  <h2>1. 安装 tt2 CLI</h2>
+  <p>通过 npm 全局安装（推荐 Node.js ≥ 18）：</p>
+  <pre><code>npm install -g @tt2/cli</code></pre>
+  <p>或使用一键安装脚本（macOS / Linux）：</p>
+  <pre><code>curl -fsSL https://lhub.tt2.li/install.sh | sh</code></pre>
+  <p>验证安装：</p>
+  <pre><code>tt2 --version</code></pre>
+
+  <h2>2. 登录观猹账号</h2>
+  <pre><code>tt2 login</code></pre>
+  <p>
+    CLI 会发起<strong>设备码授权</strong>：终端显示一个形如 <code>ABCD-1234</code> 的授权码和一个确认链接。
+    在浏览器中打开链接（或直接进入<a href="/console/device/">控制台设备页</a>），
+    使用观猹账号登录后确认授权，CLI 即自动获得凭证。
+  </p>
+  <p>确认当前登录身份：</p>
+  <pre><code>tt2 whoami</code></pre>
+
+  <h2>3. 推送你的站点</h2>
+  <p>假设你有一个构建好的静态目录 <code>./dist</code>（必须包含 <code>index.html</code>）：</p>
+  <pre><code>tt2 push ./dist --name myapp</code></pre>
+  <p>
+    推送后，服务端的<strong>猹询码</strong>会对产物进行安全审查与自动适配，然后分发到边缘节点。
+    几秒钟后，你的站点即可通过 <strong>https://myapp.lhub.tt2.li</strong> 访问，SSL 证书自动签发。
+  </p>
+
+  <h2>4. 跟踪任务进度</h2>
+  <p>推送是异步任务。用以下命令查看进度与结果：</p>
+  <pre><code># 查看最近的部署任务
+tt2 tasks
+
+# 持续跟踪某个任务（将 &lt;task_id&gt; 替换为 push 返回的任务 ID）
+tt2 reply &lt;task_id&gt;</code></pre>
+
+  <h2>接下来</h2>
+  <ul>
+    <li><a href="/docs/cli/">CLI 完整命令参考</a>——状态查询、站点管理、域名绑定、TokenPay 连接</li>
+    <li><a href="/docs/domain/">自备域名指南</a>——把 example.com 指到你的 lhub 站点</li>
+    <li><a href="/docs/standards/">推送标准</a>——产物规范与猹询码的自动修补行为</li>
+  </ul>
+
+  <h2>常见问题</h2>
+  <h3>部署要花多少钱？</h3>
+  <p>
+    部署任务消耗你在控制台连接的 <strong>TokenPay（TokenDance）模型额度</strong>。
+    额度耗尽时会自动切换到<strong>全平台共享的免费任务池</strong>，排队时间可能略长，但不会部署失败。
+  </p>
+  <h3>站点名字有什么规则？</h3>
+  <p>
+    <code>--name</code> 决定了三级域名 <code>&lt;name&gt;.lhub.tt2.li</code>。
+    仅允许小写字母、数字和中划线，3–32 字符，全平台唯一，先到先得。
+  </p>
+</DocsLayout>

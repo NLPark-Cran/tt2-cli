@@ -42,3 +42,11 @@ cd api && uv sync && uv run pytest          # 控制面
 shellcheck cli/tt2 cli/install.sh           # CLI
 cd web && npm i && npm run build            # 官网
 ```
+
+## 生产部署（当前拓扑）
+
+- **控制面**（45.154.13.123）：代码在 `/opt/tt2/tt2-cli`（git 仓库，main 分支）；systemd 服务 `tt2-api`（127.0.0.1:8902）与 `tt2-chaxunma`；环境文件 `/etc/tt2/api.env`（含全部密钥，权限 600）；部署 SSH 私钥 `/etc/tt2/deploy_key`；站点持久化 `/srv/tt2/sites/`，暂存区 `/srv/tt2/staging/`。
+- **更新控制面**：`cd /opt/tt2/tt2-cli && git pull && cd api && uv sync --no-dev && systemctl restart tt2-api tt2-chaxunma`。
+- **nginx**：`cli.tt2.li`（install.sh/tt2 静态 + /api 反代）与 `free.hub.tt2.li`（官网静态 + /api 反代），站点配置模板在 `deploy/control/nginx-*`。
+- **边缘节点**：node-1 = 38.76.172.131（后缀域 lhub.tt2.li），只有 Caddy + deploy 低权用户；片段管理脚本 `/usr/local/bin/tt2-caddy-{install,remove}`（sudoers 白名单）。新节点用 `deploy/edge/bootstrap.sh`。
+- **数据库**：PostgreSQL `tt2` 库；Redis db 9（队列+配额）。测试用 `tt2_test` / redis db 15。
