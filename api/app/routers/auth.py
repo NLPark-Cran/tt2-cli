@@ -74,6 +74,7 @@ async def watcha_callback(
         secure=True,
         samesite="lax",
         max_age=30 * 86400,
+        domain=".tt2.li",  # 控制台与 API 分属不同子域
     )
     return resp
 

@@ -13,7 +13,7 @@ def build_authorize_url(state: str) -> str:
     params = {
         "response_type": "code",
         "client_id": s.watcha_client_id,
-        "redirect_uri": f"{s.api_base_url}/api/v1/auth/watcha/callback",
+        "redirect_uri": f"{s.web_base_url}/api/v1/auth/watcha/callback",
         "scope": "read",
         "state": state,
     }
@@ -29,7 +29,7 @@ async def exchange_code(code: str) -> dict:
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": f"{s.api_base_url}/api/v1/auth/watcha/callback",
+                "redirect_uri": f"{s.web_base_url}/api/v1/auth/watcha/callback",
                 "client_id": s.watcha_client_id,
                 "client_secret": s.watcha_client_secret,
             },

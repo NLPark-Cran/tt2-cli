@@ -1,0 +1,18 @@
+[Unit]
+Description=tt2 猹询码 worker（任务队列消费，glm-5.3-flash）
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/tt2/tt2-cli/api
+EnvironmentFile=/etc/tt2/api.env
+ExecStart=/root/.local/bin/uv run python -m app.chaxunma.worker
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/srv/tt2 /etc/tt2
+
+[Install]
+WantedBy=multi-user.target

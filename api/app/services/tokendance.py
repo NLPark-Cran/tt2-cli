@@ -24,7 +24,7 @@ def new_pkce_pair() -> tuple[str, str]:
 
 def build_tokendance_auth_url(state: str, code_challenge: str) -> str:
     s = get_settings()
-    callback = f"{s.api_base_url}/api/v1/auth/tokendance/callback?state={state}"
+    callback = f"{s.web_base_url}/api/v1/auth/tokendance/callback?state={state}"
     params = {
         "callback_url": callback,
         "code_challenge": code_challenge,

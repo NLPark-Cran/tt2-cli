@@ -1,0 +1,312 @@
+#!/usr/bin/env bash
+# tt2 — ?hub.tt2.li 托管网络 CLI（Agent 与人类通用）
+# 仅依赖 curl + tar。文档: https://free.hub.tt2.li/docs
+set -euo pipefail
+
+TT2_VERSION="0.1.0"
+TT2_API="${TT2_API:-https://cli.tt2.li}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tt2"
+TOKEN_FILE="$CONFIG_DIR/credentials"
+JSON_MODE=0
+
+# 退出码: 0 成功 / 2 参数 / 3 认证 / 4 配额 / 5 服务端
+
+die() { echo "错误: $*" >&2; exit "${2:-1}"; }
+
+need_cmd() { command -v "$1" >/dev/null || die "缺少依赖: $1" 2; }
+
+load_token() {
+    [ -f "$TOKEN_FILE" ] || die "未登录。先运行: tt2 login" 3
+    TT2_TOKEN="$(cat "$TOKEN_FILE")"
+}
+
+# api <METHOD> <PATH> [curl 额外参数...]
+api() {
+    local method="$1" path="$2"; shift 2
+    local http_code body
+    body="$(mktemp)"
+    local args=(-sS -X "$method" -o "$body" -w "%{http_code}")
+    [ -n "${TT2_TOKEN:-}" ] && args+=(-H "Authorization: Bearer $TT2_TOKEN")
+    http_code="$(curl "${args[@]}" "$@" "$TT2_API$path")" || { rm -f "$body"; die "网络请求失败: $path" 5; }
+    BODY="$(cat "$body")"; rm -f "$body"
+    case "$http_code" in
+        2*) return 0 ;;
+        401) echo "$BODY" >&2; exit 3 ;;
+        409|410) echo "$BODY" >&2; exit 4 ;;
+        4*)
+            if echo "$BODY" | grep -q '"code"'; then
+                echo "$BODY" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4 >&2
+            else
+                echo "$BODY" >&2
+            fi
+            # 配额类错误
+            echo "$BODY" | grep -qE 'limit|quota|exhausted|free_pool' && exit 4
+            exit 2 ;;
+        *) echo "$BODY" >&2; exit 5 ;;
+    esac
+}
+
+json_field() { # json_field <key> — 从 $BODY 提取字符串字段（无 jq 依赖）
+    echo "$BODY" | grep -o "\"$1\":\"[^\"]*\"" | head -1 | cut -d'"' -f4
+}
+
+out() { # 人类可读 or --json
+    if [ "$JSON_MODE" = "1" ]; then echo "$BODY"; else echo "$1"; fi
+}
+
+usage() {
+    cat <<EOF
+tt2 v$TT2_VERSION — 让 Agent 一句话上线你的产品
+
+用法: tt2 <命令> [参数] [--json]
+
+  login [--token <tt2_pat_...>]   登录（设备码授权，浏览器确认一次）
+  logout                          退出登录
+  whoami                          查看当前账号
+  push <目录> --name <站点名> [--task "说明"] [--spa]
+                                  打包并提交部署任务（猹询码审查后上线）
+  reply <task_id> <消息>           回答猹询码的反问，继续任务
+  status <task_id>                查看任务状态
+  tasks                           最近任务列表
+  sites                           我的站点列表
+  delete <站点名>                  删除站点
+  domain add <域名> --site <站点名> 绑定自备域名（输出 DNS 填写指南）
+  domain list                     我的域名
+  domain check <域名>             检查解析与证书状态
+  domain delete <域名>            解绑域名
+  connect-tokenpay                输出 TokenPay 授权链接（部署计费）
+  version                         版本
+
+环境变量: TT2_API（默认 https://cli.tt2.li）
+EOF
+}
+
+cmd_login() {
+    if [ "${1:-}" = "--token" ]; then
+        [ -n "${2:-}" ] || die "用法: tt2 login --token <tt2_pat_...>" 2
+        mkdir -p "$CONFIG_DIR"
+        echo -n "$2" > "$TOKEN_FILE"
+        chmod 600 "$TOKEN_FILE"
+        TT2_TOKEN="$2"
+        api GET /api/v1/auth/me >/dev/null
+        echo "登录成功: $(json_field nickname)"
+        return 0
+    fi
+    # 设备码授权流
+    api POST /api/v1/auth/device
+    local device_code user_code url
+    device_code="$(json_field device_code)"
+    user_code="$(json_field user_code)"
+    url="$(json_field verification_url)"
+    echo "请在浏览器打开（任何设备均可）:"
+    echo "  $url"
+    echo "并确认授权码: $user_code"
+    echo "等待授权中（10 分钟内有效）..."
+    for _ in $(seq 1 60); do
+        sleep 5
+        set +e
+        BODY="$(curl -sS "$TT2_API/api/v1/auth/device/poll?device_code=$device_code")"
+        set -e
+        case "$BODY" in
+            *'"status":"pending"'*) continue ;;
+            *'"token":"'*)
+                local token
+                token="$(json_field token)"
+                mkdir -p "$CONFIG_DIR"
+                echo -n "$token" > "$TOKEN_FILE"
+                chmod 600 "$TOKEN_FILE"
+                echo "登录成功！Token 已保存到 $TOKEN_FILE"
+                echo "提示: 部署前请到 https://free.hub.tt2.li/console 连接 TokenPay。"
+                return 0 ;;
+            *) die "授权失败或已过期，请重试: $BODY" 3 ;;
+        esac
+    done
+    die "等待授权超时" 3
+}
+
+cmd_logout() { rm -f "$TOKEN_FILE" && echo "已退出登录"; }
+
+cmd_whoami() {
+    load_token
+    api GET /api/v1/auth/me
+    if [ "$JSON_MODE" = "1" ]; then echo "$BODY"; else
+        echo "昵称: $(json_field nickname)"
+        echo "TokenPay: $(json_field tokendance_connected)"
+    fi
+}
+
+cmd_push() {
+    local dir="${1:-}"; shift || true
+    if [ -z "$dir" ] || [ ! -d "$dir" ]; then die "用法: tt2 push <目录> --name <站点名>" 2; fi
+    local name="" task="deploy my site"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name) name="$2"; shift 2 ;;
+            --task) task="$2"; shift 2 ;;
+            *) die "未知参数: $1" 2 ;;
+        esac
+    done
+    [ -n "$name" ] || die "缺少 --name <站点名>" 2
+    [ -f "$dir/index.html" ] || echo "警告: $dir 下没有 index.html，请确认已构建为静态产物" >&2
+
+    need_cmd tar
+    local archive
+    archive="$(mktemp --suffix=.tar.gz)"
+    tar -czf "$archive" --exclude='.git' --exclude='node_modules' -C "$dir" .
+
+    load_token
+    echo "上传并提交任务..."
+    api POST /api/v1/tasks -F "archive=@$archive" -F "name=$name" -F "task=$task"
+    rm -f "$archive"
+    local task_id
+    task_id="$(json_field task_id)"
+    [ -n "$task_id" ] || { echo "$BODY" >&2; exit 5; }
+    echo "任务已创建: $task_id（猹询码审查中）"
+
+    # 轮询直到终态
+    for _ in $(seq 1 120); do
+        sleep 5
+        api GET "/api/v1/tasks/$task_id"
+        local status
+        status="$(json_field status)"
+        case "$status" in
+            done)
+                local url
+                url="$(echo "$BODY" | grep -o '"url":"[^"]*"' | head -1 | cut -d'"' -f4)"
+                if [ "$JSON_MODE" = "1" ]; then echo "$BODY"; else
+                    echo "✓ 已上线: $url"
+                    echo "  自备域名: tt2 domain add <域名> --site $name"
+                fi
+                return 0 ;;
+            needs_input)
+                echo "猹询码需要你的输入:"
+                echo "$BODY" | grep -o '"question":{[^}]*}' >&2
+                echo "用以下命令回答: tt2 reply $task_id \"你的回答\""
+                [ "$JSON_MODE" = "1" ] && echo "$BODY"
+                return 0 ;;
+            failed)
+                echo "部署失败:" >&2
+                echo "$BODY" | grep -o '"error":"[^"]*"' | head -1 | cut -d'"' -f4 >&2
+                [ "$JSON_MODE" = "1" ] && echo "$BODY"
+                exit 5 ;;
+            *) echo "  状态: $status ..." ;;
+        esac
+    done
+    die "等待任务结果超时，可用 tt2 status $task_id 继续查看" 5
+}
+
+cmd_reply() {
+    local task_id="${1:-}" msg="${2:-}"
+    if [ -z "$task_id" ] || [ -z "$msg" ]; then die "用法: tt2 reply <task_id> <消息>" 2; fi
+    load_token
+    api POST "/api/v1/tasks/$task_id/reply" -H "Content-Type: application/json" \
+        -d "{\"message\": $(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/^/\"/; s/$/\"/')}"
+    echo "已提交回复，任务继续。查看进度: tt2 status $task_id"
+}
+
+cmd_status() {
+    [ -n "${1:-}" ] || die "用法: tt2 status <task_id>" 2
+    load_token
+    api GET "/api/v1/tasks/$1"
+    if [ "$JSON_MODE" = "1" ]; then echo "$BODY"; else
+        echo "状态: $(json_field status)"
+        local url
+        url="$(echo "$BODY" | grep -o '"url":"[^"]*"' | head -1 | cut -d'"' -f4)"
+        [ -n "$url" ] && echo "URL: $url"
+        local error
+        error="$(json_field error)"
+        [ -n "$error" ] && echo "错误: $error"
+    fi
+}
+
+cmd_tasks() {
+    load_token
+    api GET "/api/v1/tasks"
+    out "任务列表见 --json 输出" && [ "$JSON_MODE" != "1" ] && echo "$BODY"
+}
+
+cmd_sites() {
+    load_token
+    api GET /api/v1/sites
+    if [ "$JSON_MODE" = "1" ]; then echo "$BODY"; else
+        echo "$BODY" | grep -o '"host":"[^"]*"' | cut -d'"' -f4 | while read -r h; do
+            echo "  https://$h"
+        done
+    fi
+}
+
+cmd_delete() {
+    [ -n "${1:-}" ] || die "用法: tt2 delete <站点名>" 2
+    load_token
+    api DELETE "/api/v1/sites/$1"
+    echo "已删除站点: $1"
+}
+
+cmd_domain() {
+    local sub="${1:-}"; shift || true
+    load_token
+    case "$sub" in
+        add)
+            local domain="${1:-}" site=""
+            shift || true
+            while [ $# -gt 0 ]; do
+                case "$1" in --site) site="$2"; shift 2 ;; *) die "未知参数: $1" 2 ;; esac
+            done
+            if [ -z "$domain" ] || [ -z "$site" ]; then
+                die "用法: tt2 domain add <域名> --site <站点名>" 2
+            fi
+            api POST /api/v1/domains -H "Content-Type: application/json" \
+                -d "{\"domain\": \"$domain\", \"site\": \"$site\"}"
+            echo "域名已登记。请按以下指南填写 DNS 解析:"
+            echo "$BODY"
+            ;;
+        list) api GET /api/v1/domains; echo "$BODY" ;;
+        check)
+            [ -n "${1:-}" ] || die "用法: tt2 domain check <域名>" 2
+            api GET "/api/v1/domains/$1/check"
+            echo "$BODY" ;;
+        delete)
+            [ -n "${1:-}" ] || die "用法: tt2 domain delete <域名>" 2
+            api DELETE "/api/v1/domains/$1"
+            echo "已解绑: $1" ;;
+        *) die "用法: tt2 domain <add|list|check|delete>" 2 ;;
+    esac
+}
+
+cmd_connect_tokenpay() {
+    load_token
+    api GET /api/v1/auth/tokendance/connect
+    local url
+    url="$(json_field authorize_url)"
+    echo "请在浏览器打开以下链接完成 TokenPay（TokenDance）授权:"
+    echo "  $url"
+    echo "授权后你的部署任务将使用自己的模型额度（可随时在 TokenDance 控制台管理限额）。"
+}
+
+main() {
+    # 全局 --json
+    local args=()
+    for a in "$@"; do
+        if [ "$a" = "--json" ]; then JSON_MODE=1; else args+=("$a"); fi
+    done
+    set -- "${args[@]:-}"
+    local cmd="${1:-help}"; shift || true
+    case "$cmd" in
+        login) cmd_login "$@" ;;
+        logout) cmd_logout ;;
+        whoami) cmd_whoami ;;
+        push) cmd_push "$@" ;;
+        reply) cmd_reply "$@" ;;
+        status) cmd_status "$@" ;;
+        tasks) cmd_tasks ;;
+        sites) cmd_sites ;;
+        delete) cmd_delete "$@" ;;
+        domain) cmd_domain "$@" ;;
+        connect-tokenpay) cmd_connect_tokenpay ;;
+        version|--version|-v) echo "tt2 $TT2_VERSION" ;;
+        help|--help|-h) usage ;;
+        *) usage >&2; exit 2 ;;
+    esac
+}
+
+main "$@"

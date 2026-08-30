@@ -1,0 +1,19 @@
+[Unit]
+Description=tt2-api 控制面（FastAPI/uvicorn）
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/tt2/tt2-cli/api
+EnvironmentFile=/etc/tt2/api.env
+ExecStart=/root/.local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 8902
+Restart=on-failure
+RestartSec=3
+# 加固
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/srv/tt2 /etc/tt2
+
+[Install]
+WantedBy=multi-user.target
