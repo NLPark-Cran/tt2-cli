@@ -59,9 +59,6 @@ def render_caddy_snippet(primary_host: str, extra_hosts: list[str], spa: bool) -
     header @static_assets Cache-Control "public, max-age=2592000, immutable"
 {spa_block}
     file_server
-    log {{
-        output file /var/log/caddy/{primary_host}.log
-    }}
 }}
 """
 

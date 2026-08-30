@@ -25,9 +25,16 @@ async def worker_loop(worker_id: int) -> None:
     while True:
         try:
             item = await redis.blpop(QUEUE_KEY, timeout=30)
-            if not item:
+        except Exception as e:  # noqa: BLE001 — blpop 读超时等瞬态错误视为空轮询
+            if type(e).__name__ == "TimeoutError":
                 continue
-            _, task_id = item
+            await log.aexception("worker_loop_error", worker_id=worker_id)
+            await asyncio.sleep(2)
+            continue
+        if not item:
+            continue
+        _, task_id = item
+        try:
             await run_task(task_id, redis)
         except asyncio.CancelledError:
             raise
