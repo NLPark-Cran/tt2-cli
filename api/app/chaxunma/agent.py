@@ -1,13 +1,12 @@
-"""猹询码 agent loop：glm-5.3-flash（TokenDance 网关）+ 白名单工具。
+"""猹询码接入层：计费解析、免费池降级、部署桥接、结果持久化。
 
-借鉴 EVA 的极简受限工具哲学与 kimi-code 的结构清晰度。
-运行方式：python -m app.chaxunma.worker
+agent loop 本体在 cran-code@lite 的 chaxunma 包；本模块只做胶水。
 """
 
 import asyncio
-import json
 from pathlib import Path
 
+from chaxunma import AgentLoop, ModelCallError, ToolContext
 from sqlalchemy import select
 
 from ..config import get_settings
@@ -17,26 +16,12 @@ from ..db import SessionLocal
 from ..models import Site, Task, TaskStatus, TokenDanceKey
 from ..services.deployer import DeployError, deploy_site, pick_node
 from ..services.quota import QuotaExceeded, consume_free_pool
-from ..services.tokendance import TokenDanceCallError, chat_completions
-from .prompts import SYSTEM_PROMPT
-from .tools import TOOL_SCHEMAS, ToolContext, run_local_tool
 
 log = get_logger("chaxunma")
 
-MAX_TOOL_ITERATIONS = 12
 
-
-class BillingKey:
-    """解析本任务应使用的 TokenDance Key：优先用户 TokenPay，耗尽降级共享免费池。"""
-
-    def __init__(self) -> None:
-        self.key: str | None = None
-        self.billing = "tokenpay"
-        self.block_reason: str | None = None
-
-
-async def _resolve_billing(task: Task, redis) -> BillingKey:  # noqa: ANN001
-    result = BillingKey()
+async def _resolve_user_key(task: Task) -> str | None:
+    """取用户 TokenPay 授权的 TokenDance Key。无授权返回 None。"""
     async with SessionLocal() as db:
         row = (
             (
@@ -49,41 +34,84 @@ async def _resolve_billing(task: Task, redis) -> BillingKey:  # noqa: ANN001
             .scalars()
             .first()
         )
-    if not row:
-        result.block_reason = (
-            "尚未连接 TokenPay。请访问 https://free.hub.tt2.li/console 完成 TokenDance 授权后重试。"
-        )
-        return result
-    result.key = decrypt_secret(row.key_enc)
-    return result
+    return decrypt_secret(row.key_enc) if row else None
 
 
-async def _downgrade_to_free_pool(result: BillingKey, redis) -> bool:  # noqa: ANN001
+async def _try_free_pool(redis) -> str | None:  # noqa: ANN001
+    """降级到共享免费池（平台 Key）。池空或无平台 Key 返回 None。"""
     settings = get_settings()
     if not settings.platform_tokendance_key:
-        return False
+        return None
     try:
         await consume_free_pool(redis)
-    except QuotaExceeded as e:
-        result.block_reason = e.message
-        return False
-    result.key = settings.platform_tokendance_key
-    result.billing = "free_pool"
-    return True
+    except QuotaExceeded:
+        return None
+    return settings.platform_tokendance_key
+
+
+def _make_deploy(task_id: str):
+    """deploy 回调：猹询码副作用的唯一出口，由服务端可信路径执行。"""
+
+    async def deploy(ctx: ToolContext) -> str:
+        spa = bool(ctx.config.get("spa"))
+        async with SessionLocal() as db:
+            task = await db.get(Task, task_id)
+            if not task:
+                return "错误：任务不存在"
+            site = await db.get(Site, task.site_id) if task.site_id else None
+            if not site:
+                node = await pick_node(db)
+                host = f"{task.site_name}.{node.suffix}"
+                clash = (
+                    (
+                        await db.execute(
+                            select(Site).where(Site.host == host, Site.status == "active")
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if clash:
+                    return (
+                        f"错误：站点名 {task.site_name} 已被占用（name_taken）。"
+                        "请用 ask_user 询问用户换新名字。"
+                    )
+                site = Site(
+                    user_id=task.user_id,
+                    node_id=node.id,
+                    name=task.site_name,
+                    host=host,
+                    spa=spa,
+                )
+                db.add(site)
+                await db.flush()
+                task.site_id = site.id
+            else:
+                site.spa = spa
+            try:
+                url = await deploy_site(db, site, task.staging_path, spa)
+            except DeployError as e:
+                return f"错误：部署失败：{e}"
+            await db.commit()
+            return url
+
+    return deploy
 
 
 async def run_task(task_id: str, redis) -> None:  # noqa: ANN001
-    """执行一个任务（可能被 reply 重新入队多次）。"""
+    """执行一个任务（reply 会重新入队）。永不向上抛异常。"""
     async with SessionLocal() as db:
         task = await db.get(Task, task_id)
         if not task or task.status not in (TaskStatus.QUEUED.value, TaskStatus.RUNNING.value):
             return
         task.status = TaskStatus.RUNNING.value
+        history: list[dict] = list(task.messages)
+        staging_path = task.staging_path
         await db.commit()
 
     try:
         await asyncio.wait_for(
-            _run_task_inner(task_id, redis),
+            _run_inner(task_id, history, staging_path, redis),
             timeout=get_settings().task_timeout_seconds,
         )
     except TimeoutError:
@@ -95,171 +123,79 @@ async def run_task(task_id: str, redis) -> None:  # noqa: ANN001
         )
 
 
-async def _run_task_inner(task_id: str, redis) -> None:  # noqa: ANN001
+async def _run_inner(task_id: str, history: list[dict], staging_path: str, redis) -> None:  # noqa: ANN001
+    settings = get_settings()
     async with SessionLocal() as db:
         task = await db.get(Task, task_id)
         assert task is not None
-        messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}, *task.messages]
-        staging = Path(task.staging_path)
 
-    billing = await _resolve_billing(task, redis)
-    if billing.block_reason:
-        await _finalize(task_id, status=TaskStatus.FAILED.value, error=billing.block_reason)
+    api_key = await _resolve_user_key(task)
+    billing = "tokenpay"
+    if not api_key:
+        await _finalize(
+            task_id,
+            status=TaskStatus.FAILED.value,
+            error=(
+                "尚未连接 TokenPay。请访问 https://free.hub.tt2.li/console "
+                "完成 TokenDance 授权后重试。"
+            ),
+        )
         return
 
-    ctx = ToolContext(staging)
-    url: str | None = None
+    ctx = ToolContext(Path(staging_path))
+    deploy = _make_deploy(task_id)
 
-    for _ in range(MAX_TOOL_ITERATIONS):
-        assert billing.key is not None
-        try:
-            resp = await chat_completions(billing.key, messages, tools=TOOL_SCHEMAS)
-        except TokenDanceCallError as e:
-            can_downgrade = billing.billing == "tokenpay" and e.recovery_action
-            if can_downgrade and await _downgrade_to_free_pool(billing, redis):
-                await log.ainfo("downgrade_to_free_pool", task_id=task_id, action=e.recovery_action)
-                continue
+    async def _run_loop(key: str):
+        loop = AgentLoop(
+            api_key=key,
+            model=settings.chaxunma_model,
+            base_url=settings.tokendance_base_url,
+            app_url=settings.app_url,
+        )
+        return await loop.run(history, ctx, deploy)
+
+    try:
+        outcome = await _run_loop(api_key)
+    except ModelCallError as e:
+        # TokenPay 额度/Key 问题 → 尝试降级到共享免费池后重试一次
+        platform_key = None
+        if e.recovery_action:
+            platform_key = await _try_free_pool(redis)
+        if not platform_key:
             reason = (
                 "TokenPay 额度不足或 Key 已失效，且共享免费池不可用。"
-                f"请在控制台重新授权：https://free.hub.tt2.li/console（{e.message}）"
+                f"请在控制台重新授权：https://free.hub.tt2.li/console（{e}）"
             )
             await _finalize(task_id, status=TaskStatus.FAILED.value, error=reason)
             return
-
-        choice = resp["choices"][0]
-        msg = choice["message"]
-        messages.append(msg)
-
-        tool_calls = msg.get("tool_calls") or []
-        if not tool_calls:
-            # 模型没有调工具：把文本反馈记录，提示其必须调用工具收尾
-            messages.append(
-                {
-                    "role": "user",
-                    "content": "请使用工具完成部署（deploy/finish/ask_user/fail 之一）。",
-                }
-            )
-            continue
-
-        for call in tool_calls:
-            name = call["function"]["name"]
-            try:
-                args = json.loads(call["function"]["arguments"] or "{}")
-            except json.JSONDecodeError:
-                args = {}
-            result = run_local_tool(ctx, name, args)
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call["id"],
-                    "content": result,
-                }
-            )
-
-        # 部署请求：由服务端（而非模型）真正执行，工具白名单的唯一出口
-        if ctx.deploy_requested:
-            ctx.deploy_requested = False
-            url_or_error = await _do_deploy(task_id, ctx)
-            if isinstance(url_or_error, str) and url_or_error.startswith("https://"):
-                url = url_or_error
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"deploy 工具结果：部署成功，URL={url}。请调用 finish 总结。",
-                    }
-                )
-            else:
-                messages.append({"role": "user", "content": f"deploy 工具结果：{url_or_error}"})
-            continue
-
-        if ctx.question:
-            await _finalize(
-                task_id,
-                status=TaskStatus.NEEDS_INPUT.value,
-                question=ctx.question,
-                messages=messages[1:],  # 不持久化 system
-                billing=billing.billing,
-            )
-            return
-
-        if ctx.fail_reason:
-            await _finalize(
-                task_id,
-                status=TaskStatus.FAILED.value,
-                error=ctx.fail_reason,
-                messages=messages[1:],
-                billing=billing.billing,
-            )
-            return
-
-        if ctx.finish_summary:
-            if not url:
-                messages.append({"role": "user", "content": "你还没有成功 deploy，不能 finish。"})
-                ctx.finish_summary = None
-                continue
-            await _finalize(
-                task_id,
-                status=TaskStatus.DONE.value,
-                result={"url": url, "summary": ctx.finish_summary},
-                messages=messages[1:],
-                billing=billing.billing,
-            )
+        await log.ainfo("downgrade_to_free_pool", task_id=task_id, action=e.recovery_action)
+        billing = "free_pool"
+        # 修补工具是幂等失败的（old 找不到会报错但不崩溃），重跑安全
+        ctx = ToolContext(Path(staging_path))
+        try:
+            outcome = await _run_loop(platform_key)
+        except ModelCallError as e2:
+            await _finalize(task_id, status=TaskStatus.FAILED.value, error=f"模型服务不可用：{e2}")
             return
 
     await _finalize(
         task_id,
-        status=TaskStatus.FAILED.value,
-        error="任务超过最大处理步数",
-        messages=messages[1:],
-        billing=billing.billing,
+        status={
+            "done": TaskStatus.DONE.value,
+            "needs_input": TaskStatus.NEEDS_INPUT.value,
+            "failed": TaskStatus.FAILED.value,
+            "over_steps": TaskStatus.FAILED.value,
+        }[outcome.kind],
+        question=outcome.question,
+        result=outcome.result,
+        error=outcome.error,
+        messages=outcome.messages or None,
+        billing=billing,
     )
 
 
-async def _do_deploy(task_id: str, ctx: ToolContext) -> str:
-    """真正执行部署（服务端可信路径）。返回 URL 或错误描述。"""
-    async with SessionLocal() as db:
-        task = await db.get(Task, task_id)
-        assert task is not None
-        spa = bool(ctx.config.get("spa"))
-
-        site = None
-        if task.site_id:
-            site = await db.get(Site, task.site_id)
-        if not site:
-            node = await pick_node(db)
-            host = f"{task.site_name}.{node.suffix}"
-            clash = (
-                (await db.execute(select(Site).where(Site.host == host, Site.status == "active")))
-                .scalars()
-                .first()
-            )
-            if clash:
-                return (
-                    f"错误：站点名 {task.site_name} 已被占用（name_taken）。"
-                    "请用 ask_user 询问用户换新名字。"
-                )
-            site = Site(
-                user_id=task.user_id,
-                node_id=node.id,
-                name=task.site_name,
-                host=host,
-                spa=spa,
-            )
-            db.add(site)
-            await db.flush()
-            task.site_id = site.id
-        else:
-            site.spa = spa
-
-        try:
-            url = await deploy_site(db, site, task.staging_path, spa)
-        except DeployError as e:
-            return f"错误：部署失败：{e}"
-        await db.commit()
-        return url
-
-
 async def _finalize(task_id: str, **fields) -> None:  # noqa: ANN003
+    fields = {k: v for k, v in fields.items() if v is not None}
     async with SessionLocal() as db:
         task = await db.get(Task, task_id)
         if not task:

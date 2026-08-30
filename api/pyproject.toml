@@ -17,7 +17,12 @@ dependencies = [
     "cryptography>=44",
     "python-multipart>=0.0.12",
     "itsdangerous>=2.2",
+    "chaxunma>=0.1.0",
 ]
+
+[tool.uv.sources]
+# 猹询码运行时：cran-code 仓 lite 分支
+chaxunma = { git = "https://github.com/NLPark-Cran/cran-code.git", rev = "lite", subdirectory = "packages/chaxunma" }
 
 [dependency-groups]
 dev = [
