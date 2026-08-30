@@ -1,0 +1,134 @@
+/* Tailwind CSS v4：通过 @theme 定义设计令牌 */
+@import "tailwindcss";
+
+@theme {
+  /* 品牌色：观猹生态鲜绿 */
+  --color-brand-50: #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-200: #bbf7d0;
+  --color-brand-300: #86efac;
+  --color-brand-400: #4ade80;
+  --color-brand-500: #22c55e;
+  --color-brand-600: #16a34a;
+  --color-brand-700: #15803d;
+  --color-brand-800: #166534;
+  --color-brand-900: #14532d;
+  --color-brand-950: #052e16;
+
+  /* 深色底色系 */
+  --color-ink-950: #070a08;
+  --color-ink-900: #0b0f0c;
+  --color-ink-850: #0e1410;
+  --color-ink-800: #131a15;
+  --color-ink-700: #1c2620;
+  --color-ink-600: #2a3630;
+  --color-ink-500: #3d4d44;
+
+  --font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", monospace;
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+
+  /* 首屏克制的入场动画 */
+  --animate-rise: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-blink: blink 1.1s step-end infinite;
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-ink-950);
+  color: #d7e4dc;
+  font-family: var(--font-sans);
+  /* 终端质感的网格底纹 */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34, 197, 94, 0.08), transparent),
+    linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+::selection {
+  background: rgba(34, 197, 94, 0.35);
+  color: #f0fdf4;
+}
+
+/* 细滚动条，贴合终端美学 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-ink-900); }
+::-webkit-scrollbar-thumb { background: var(--color-ink-600); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-brand-700); }
+
+/* 文档页正文排版（不引入 typography 插件，手写少量样式） */
+.prose-tt2 h2 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #f0fdf4;
+}
+.prose-tt2 h3 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--color-brand-300);
+}
+.prose-tt2 p { margin: 0.75rem 0; line-height: 1.8; color: #b8c9bf; }
+.prose-tt2 ul, .prose-tt2 ol { margin: 0.75rem 0; padding-left: 1.5rem; color: #b8c9bf; line-height: 1.8; }
+.prose-tt2 ul { list-style: disc; }
+.prose-tt2 ol { list-style: decimal; }
+.prose-tt2 li { margin: 0.25rem 0; }
+.prose-tt2 a { color: var(--color-brand-400); text-decoration: underline; text-underline-offset: 3px; }
+.prose-tt2 a:hover { color: var(--color-brand-300); }
+.prose-tt2 code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-ink-800);
+  border: 1px solid var(--color-ink-700);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  color: var(--color-brand-300);
+}
+.prose-tt2 pre {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--color-ink-900);
+  border: 1px solid var(--color-ink-700);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.prose-tt2 pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #c9e7d4;
+}
+.prose-tt2 table {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.prose-tt2 th, .prose-tt2 td {
+  border: 1px solid var(--color-ink-700);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.prose-tt2 th {
+  background: var(--color-ink-850);
+  color: var(--color-brand-300);
+  font-weight: 600;
+}
+.prose-tt2 td { color: #b8c9bf; }
+.prose-tt2 strong { color: #e6f4ec; }

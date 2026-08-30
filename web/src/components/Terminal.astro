@@ -1,0 +1,49 @@
+---
+// 终端窗口组件：macOS 风格红绿灯 + $ 提示符命令行
+// 用法：<Terminal title="zsh — 80×24" lines={[...]} />
+interface Line {
+  prompt?: boolean; // 是否显示 $ 提示符（默认 true）
+  cmd?: string; // 命令文本
+  out?: string; // 输出文本（无提示符）
+}
+interface Props {
+  title?: string;
+  lines: Line[];
+  class?: string;
+}
+const { title = 'terminal', lines, class: className = '' } = Astro.props;
+---
+
+<div
+  class:list={[
+    'overflow-hidden rounded-xl border border-ink-600/70 bg-ink-900/90 shadow-[0_0_60px_-15px_rgba(34,197,94,0.25)]',
+    className,
+  ]}
+>
+  <div class="flex items-center gap-2 border-b border-ink-700/70 bg-ink-850 px-4 py-2.5">
+    <span class="h-3 w-3 rounded-full bg-red-500/70"></span>
+    <span class="h-3 w-3 rounded-full bg-yellow-500/70"></span>
+    <span class="h-3 w-3 rounded-full bg-brand-500/70"></span>
+    <span class="ml-3 font-mono text-xs text-zinc-500">{title}</span>
+  </div>
+  <div class="overflow-x-auto p-4 font-mono text-[13px] leading-7 sm:p-5">
+    {
+      lines.map((line) =>
+        line.out !== undefined ? (
+          <div class="whitespace-pre text-zinc-400">{line.out}</div>
+        ) : (
+          <div class="whitespace-pre">
+            {line.prompt !== false && (
+              <span class="mr-2 select-none text-brand-500">$</span>
+            )}
+            <span class="text-brand-100">{line.cmd}</span>
+          </div>
+        )
+      )
+    }
+    <div class="mt-1">
+      <span class="mr-2 select-none text-brand-500">$</span><span
+        class="inline-block h-4 w-2 translate-y-0.5 animate-blink bg-brand-400"></span>
+    </div>
+  </div>
+</div>

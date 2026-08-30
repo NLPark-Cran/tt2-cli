@@ -1,0 +1,22 @@
+---
+// ASCII 分隔线装饰元素
+interface Props {
+  label?: string;
+  class?: string;
+}
+const { label, class: className = '' } = Astro.props;
+---
+
+<div class:list={['select-none overflow-hidden font-mono text-xs text-ink-600', className]} aria-hidden="true">
+  {
+    label ? (
+      <div class="flex items-center gap-3">
+        <span class="h-px flex-1 bg-ink-700/70"></span>
+        <span class="tracking-widest text-ink-500">[ {label} ]</span>
+        <span class="h-px flex-1 bg-ink-700/70"></span>
+      </div>
+    ) : (
+      <div class="h-px bg-ink-700/70" />
+    )
+  }
+</div>
