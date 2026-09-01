@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     tokendance_base_url: str = "https://tokendance.space/gateway/v1"
     tokendance_auth_url: str = "https://tokendance.space/auth"
     tokendance_key_exchange_url: str = "https://tokendance.space/portal/api/v1/auth/keys"
+    # TokenDance 产品方应用 ID（分润价目等 portal API 用）
+    tokendance_app_id: str = "01M1EHGHDDD8QGCMBBDPF4GWM1"
     chaxunma_model: str = "glm-5.3-flash"
     platform_tokendance_key: str = ""  # 平台自有 Key（共享免费池熔断时使用）
 
